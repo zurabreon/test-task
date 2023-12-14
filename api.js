@@ -211,6 +211,24 @@ function Api() {
 		});
 	});
 
+	//Получить задачи
+	this.getTasks = authChecker(({ page = 1, limit = LIMIT }) => {
+		const url = `${ROOT_PATH}/api/v4/tasks?${querystring.stringify({
+			page,
+			limit,
+			with: ["leads"],
+		})}`;
+		return axios
+			.get(url, {
+				headers: {
+					Authorization: `Bearer ${access_token}`,
+				},
+			})
+			.then((res) => {
+				return res.data ? res.data._embedded.tasks : [];
+			});
+	});
+
 	// Создать задачи
 	this.createTasks = authChecker((data) => {
 		const tasksData = [].concat(data);
