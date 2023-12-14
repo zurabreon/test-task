@@ -11,6 +11,7 @@ const utils = require("./utils");
 const app = express();
 
 const LIST_OF_SERVICES_ID = [486601, 486603, 486605, 486607, 486609];
+const CONTACT_NAME_ARRAY = ['contacts']
 
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
@@ -23,7 +24,7 @@ app.get("/ping", (req, res) => res.send("pong " + Date.now()));
 
 app.post("/hook", async (req, res) => {
 
-	let servicesBill;
+	let servicesBill = 0;
 
 	const contactsRequareBody = req.body.contacts;
 
@@ -31,31 +32,45 @@ app.post("/hook", async (req, res) => {
 		
 		let dealId;
 		const [{id:contactId}] = contactsRequareBody.update;
-		
+
 		const contact = await api.getContact(contactId);
 
 		const deal = contactsRequareBody.update[0].linked_leads_id;
 
+		if (deal === undefined) {
+			console.log("Contact isn't attatched to the deal");
+			return;
+		}
+		
 		for (let i in deal) {
-			dealId = i;
+			dealId = Number(i);
+		}
+		
+		let dealPromise = await api.getDeal(dealId, CONTACT_NAME_ARRAY);
+
+
+		for (let i = 0; i < dealPromise._embedded.contacts.length; i++) {
+			if (dealPromise._embedded.contacts[i].id === Number(contactId)) {
+				if (dealPromise._embedded.contacts[i].is_main) {
+					break;
+				}
+				else {
+					console.log("Contact isn't main");
+					return;
+				}
+			}
 		}
 
-		//билл возвращает undefined потому что не считывается переменные. Нужно сделать так, чтобы считывались. Потом обновить сделки передав промис
-
-		for (let item of LIST_OF_SERVICES_ID) {
-			servicesBill += Number(utils.getFieldValues(contact.custom_fields_values, item));
-			console.log(item);
+		for (let i = 0; i < LIST_OF_SERVICES_ID.length; i++) {
+			servicesBill += Number(utils.getFieldValues(contact.custom_fields_values, LIST_OF_SERVICES_ID[i])[0]);
 		}
+		
+		const updatedLeadsValues = {
+			id: dealId,
+			price: servicesBill,
+		}		
 
-		
-		console.log(contact.custom_fields_values);
-		
-		/*const qwerty = await api.getDeal(dealId);
-		
-		const updateLeadsPrice = utils.makeField(qwerty.price, servicesBill);
-
-		console.log(updateLeadsPrice);*/
-		
+		api.updateDeals(updatedLeadsValues);
 	}
 	
 	return;
