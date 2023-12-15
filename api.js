@@ -237,6 +237,17 @@ function Api() {
 		});
 	});
 
+	//Добавление примечаний
+	this.createNotes = authChecker((data) => {
+		const [notesData] = [].concat(data);
+		const noteData = [].concat(data);
+		return axios.post(`${ROOT_PATH}/api/v4/${notesData.entity_type}/${notesData.entity_id}/notes`, noteData,{
+			headers: {
+				Authorization: `Bearer ${access_token}`,
+			},
+		});
+	});
+
 	// Получить данные воронки по ее id
 	this.getPipeline = authChecker((pipelineId) => {
 		return axios
