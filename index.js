@@ -10,9 +10,9 @@ const utils = require("./utils");
 
 const app = express();
 
-const LIST_OF_SERVICES_ID = [486601, 486603, 486605, 486607, 486609]; // id полей услуг клиники
-const WITH_PARAM_ARRAY = ['contacts'];
-const TYPE_TASK_FOR_CHECK = 3186358; // id типа задачи "Проверить"
+const LIST_OF_SERVICES_ID = [486601, 486603, 486605, 486607, 486609];
+const WITH_PARAM_ARRAY = ['contacts', 'tasks'];
+const TYPE_TASK_FOR_CHECK = 3186358;
 
 
 app.use(express.json());
@@ -29,17 +29,17 @@ app.post("/hook", async (req, res) => {
 	const contactsRequareBody = req.body.contacts;
 
 	if (contactsRequareBody) {
-		
+
 		//попробовать сделать через object.keys
-		
+
 		const [{id:contactId}] = contactsRequareBody.update;
-		
+
 		const contact = await api.getContact(contactId);
-		
+
 		const deal = contactsRequareBody.update[0].linked_leads_id;
-		
+
 		const [ dealId ] = Object.keys(deal).map(Number);
-		
+
 		if (!deal) {
 			console.log("Contact isn't attatched to the deal");
 			return;
@@ -82,43 +82,12 @@ app.post("/hook", async (req, res) => {
 		else {
 			console.log("Task has already been created");
 		}
+
+
+		
 	}
 	
-	res.sendStatus(200).send();
+	return;
 });
-
-app.post("/hookTask", async (req, res) => {
 	
-	const tasksRequreBody = req.body.task;
-
-	console.log(tasksRequreBody);
-
-	if(tasksRequreBody) {
-
-		const [{element_id:elementId}] = tasksRequreBody.update;
-		const [{element_type:elementType}] = tasksRequreBody.update;
-
-
-		const createdNoteField = [{
-			entity_id: elementId,
-			entity_type: "leads",
-			note_type: "common",
-			params: {
-				text: "Бюджет проверен, ошибок нет"
-			},
-		}];
-
-		api.createNotes(createdNoteField);
-	}
-	else{
-		console.log("Task update error");
-	}
-
-	logger.debug(tasksRequreBody);
-
-	res.sendStatus(200);
-});
-
-
-
 app.listen(config.PORT, () => logger.debug("Server started on ", config.PORT));
