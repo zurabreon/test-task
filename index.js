@@ -11,8 +11,8 @@ const utils = require("./utils");
 const app = express();
 
 const LIST_OF_SERVICES_ID = [486601, 486603, 486605, 486607, 486609];
-const CONTACT_NAME_ARRAY = ['contacts']
-const TYPE_TASK_FOR_CHECK = 0;
+const WITH_PARAM_ARRAY = ['contacts', 'tasks'];
+const TYPE_TASK_FOR_CHECK = 3186358;
 
 
 app.use(express.json());
@@ -30,6 +30,8 @@ app.post("/hook", async (req, res) => {
 
 	if (contactsRequareBody) {
 
+		//попробовать сделать через object.keys
+
 		const [{id:contactId}] = contactsRequareBody.update;
 
 		const contact = await api.getContact(contactId);
@@ -43,7 +45,7 @@ app.post("/hook", async (req, res) => {
 			return;
 		}
 		
-		const dealPromise = await api.getDeal(dealId, CONTACT_NAME_ARRAY);
+		const dealPromise = await api.getDeal(dealId, WITH_PARAM_ARRAY);
 
 		const isContactMain = dealPromise._embedded.contacts.find(item => item.id === Number(contactId)).is_main;
 
@@ -60,18 +62,29 @@ app.post("/hook", async (req, res) => {
 		}		
 		
 		api.updateDeals(updatedLeadsValues);
-		
-		/*const completeTill = Math.floor(Date.now() / 1000);
 
-		const addTaskField = {
-			task_type_id: TYPE_TASK_FOR_CHECK,
-			text: "Проверить бюджет",
-			complete_till: completeTill,
-			entity_id: dealId,
-			entity_type: "leads",
+		const completeTill = Math.floor(Date.now() / 1000) + 86400;
+
+		const tasksPromise = await api.getTasks();
+
+
+		if (!tasksPromise.find(item => (item.entity_id === dealId && !item.is_completed))) {
+			const addTaskField = {
+				task_type_id: TYPE_TASK_FOR_CHECK,
+				text: "Проверить бюджет",
+				complete_till: completeTill,
+				entity_id: dealId,
+				entity_type: "leads",
+			}
+	
+			api.createTasks(addTaskField);
+		}
+		else {
+			console.log("Task has already been created");
 		}
 
-		api.createTasks(addTaskField);*/
+
+		
 	}
 	
 	return;
