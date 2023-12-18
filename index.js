@@ -15,6 +15,7 @@ const TYPE_TASK_FOR_CHECK = 3186358; // id типа задачи "Провери
 const MILISENCONDS_IN_PER_SECOND = 1000;
 const UNIX_ONE_DAY = 86400;
 
+
 const Entities = {
 	Contacts: "contacts",
 	Leads: "leads",
