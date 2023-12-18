@@ -212,9 +212,9 @@ function Api() {
 	});
 
 	//Получить задачи
-	this.getTasks = authChecker(() => {
+	this.getTasks = authChecker((filter) => {
 		const url = `${ROOT_PATH}/api/v4/tasks?${querystring.stringify({
-
+			...filter,
 		})}`;
 		return axios
 			.get(url, {
@@ -240,8 +240,7 @@ function Api() {
 	//Добавление примечаний
 	this.createNotes = authChecker((data) => {
 		const [notesData] = [].concat(data);
-		const noteData = [].concat(data);
-		return axios.post(`${ROOT_PATH}/api/v4/${notesData.entity_type}/${notesData.entity_id}/notes`, noteData,{
+		return axios.post(`${ROOT_PATH}/api/v4/${notesData.entity_type}/${notesData.entity_id}/notes`, [notesData],{
 			headers: {
 				Authorization: `Bearer ${access_token}`,
 			},
