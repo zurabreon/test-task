@@ -212,9 +212,9 @@ function Api() {
 	});
 
 	//Получить задачи
-	this.getTasks = authChecker(() => {
+	this.getTasks = authChecker((filter) => {
 		const url = `${ROOT_PATH}/api/v4/tasks?${querystring.stringify({
-
+			...filter,
 		})}`;
 		return axios
 			.get(url, {

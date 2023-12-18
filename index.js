@@ -11,8 +11,10 @@ const utils = require("./utils");
 const app = express();
 
 const LIST_OF_SERVICES_ID = [486601, 486603, 486605, 486607, 486609];
-const WITH_PARAM_ARRAY = ['contacts', 'tasks'];
+const WITH_PARAM_ARRAY = ['contacts'];
 const TYPE_TASK_FOR_CHECK = 3186358;
+const MILISENCONDS_IN_PER_SECOND = 1000;
+const UNIXSENCONDS_IN_ONE_DAY = 86400;
 
 
 app.use(express.json());
@@ -63,10 +65,9 @@ app.post("/hook", async (req, res) => {
 		
 		api.updateDeals(updatedLeadsValues);
 
-		const completeTill = Math.floor(Date.now() / 1000) + 86400;
+		const completeTill = Math.floor(Date.now() / MILISENCONDS_IN_PER_SECOND) + UNIXSENCONDS_IN_ONE_DAY;
 
-		const tasksPromise = await api.getTasks();
-
+		const tasksPromise = await api.getTasks([dealId, isContactMain]);
 
 		if (!tasksPromise.find(item => (item.entity_id === dealId && !item.is_completed))) {
 			const addTaskField = {
@@ -81,13 +82,10 @@ app.post("/hook", async (req, res) => {
 		}
 		else {
 			console.log("Task has already been created");
-		}
-
-
-		
+		}	
 	}
 	
-	return;
+	res.sendStatus(200);
 });
 	
 app.listen(config.PORT, () => logger.debug("Server started on ", config.PORT));
