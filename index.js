@@ -10,12 +10,16 @@ const utils = require("./utils");
 
 const app = express();
 
-const LIST_OF_SERVICES_ID = [486601, 486603, 486605, 486607, 486609];
-const WITH_PARAM_ARRAY = ['contacts'];
-const TYPE_TASK_FOR_CHECK = 3186358;
+const LIST_OF_SERVICES_ID = [486601, 486603, 486605, 486607, 486609]; // id полей услуг клиники
+const TYPE_TASK_FOR_CHECK = 3186358; // id типа задачи "Проверить"
 const MILISENCONDS_IN_PER_SECOND = 1000;
-const UNIXSENCONDS_IN_ONE_DAY = 86400;
+const UNIX_ONE_DAY = 86400;
 
+
+const Entities = {
+	Contacts: "contacts",
+	Leads: "leads",
+}
 
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
@@ -32,27 +36,23 @@ app.post("/hook", async (req, res) => {
 
 	if (contactsRequareBody) {
 
-		//попробовать сделать через object.keys
-
 		const [{id:contactId}] = contactsRequareBody.update;
 
 		const contact = await api.getContact(contactId);
 
-		const deal = contactsRequareBody.update[0].linked_leads_id;
+		const [ dealId ] = Object.keys(contactsRequareBody.update[0].linked_leads_id).map(Number);
 
-		const [ dealId ] = Object.keys(deal).map(Number);
-
-		if (!deal) {
-			console.log("Contact isn't attatched to the deal");
+		if (!dealId) {
+			logger.debug("Contact isn't attatched to the deal");
 			return;
 		}
 		
-		const dealPromise = await api.getDeal(dealId, WITH_PARAM_ARRAY);
+		const deal = await api.getDeal(dealId, [Entities.Contacts]);
 
-		const isContactMain = dealPromise._embedded.contacts.find(item => item.id === Number(contactId)).is_main;
+		const isContactMain = deal._embedded.contacts.find(item => item.id === Number(contactId)).is_main;
 
 		if (!isContactMain) {
-			console.log("Contact isn't main");
+			logger.debug("Contact isn't main");
 			return;
 		}
 				
@@ -63,29 +63,60 @@ app.post("/hook", async (req, res) => {
 			price: servicesBill,
 		}		
 		
-		api.updateDeals(updatedLeadsValues);
+		await api.updateDeals(updatedLeadsValues);
 
-		const completeTill = Math.floor(Date.now() / MILISENCONDS_IN_PER_SECOND) + UNIXSENCONDS_IN_ONE_DAY;
+		const completeTill = Math.floor(Date.now() / MILISENCONDS_IN_PER_SECOND) + UNIX_ONE_DAY;
 
-		const tasksPromise = await api.getTasks([dealId, isContactMain]);
+		const tasks = await api.getTasks([dealId]);
 
-		if (!tasksPromise.find(item => (item.entity_id === dealId && !item.is_completed))) {
+		const isTaskAlreadyCreated = tasks.find(item => (item.entity_id === dealId && !item.is_completed));
+
+		if (!isTaskAlreadyCreated) {
 			const addTaskField = {
+				responsible_user_id: deal.created_by,
 				task_type_id: TYPE_TASK_FOR_CHECK,
 				text: "Проверить бюджет",
 				complete_till: completeTill,
 				entity_id: dealId,
-				entity_type: "leads",
+				entity_type: Entities.Leads,
 			}
 	
-			api.createTasks(addTaskField);
+			await api.createTasks(addTaskField);
 		}
 		else {
-			console.log("Task has already been created");
+			logger.debug("Task has already been created");
 		}	
 	}
 	
-	res.sendStatus(200);
+	res.status(200).send({message: "ok"});
 });
+
+app.post("/hookTask", async (req, res) => {
 	
+	const tasksRequreBody = req.body.task;
+
+	if(tasksRequreBody) {
+
+		const [{element_id:elementId}] = tasksRequreBody.update;
+
+		const createdNoteField = [{
+			entity_id: elementId,
+			entity_type: Entities.Leads,
+			note_type: "common",
+			params: {
+				text: "Бюджет проверен, ошибок нет"
+			},
+		}];
+
+		await api.createNotes(createdNoteField);
+	}
+	else{
+		logger.debug("Task update error");
+	}
+
+	logger.debug(tasksRequreBody);
+
+	res.status(200).send({message: "ok"});
+});
+
 app.listen(config.PORT, () => logger.debug("Server started on ", config.PORT));
