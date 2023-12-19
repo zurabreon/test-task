@@ -98,8 +98,14 @@ app.post("/hookTask", async (req, res) => {
 	if(tasksRequreBody) {
 
 		const [{element_id:elementId}] = tasksRequreBody.update;
+		const [{responsible_user_id:responsibleUserId}] = tasksRequreBody.update;
+
+		if(!responsibleUserId){
+			return;
+		}
 
 		const createdNoteField = [{
+			created_by: Number(responsibleUserId),
 			entity_id: elementId,
 			entity_type: Entities.Leads,
 			note_type: "common",
