@@ -6,78 +6,123 @@ const express = require("express");
 const api = require("./api");
 const logger = require("./logger");
 const config = require("./config");
+const utils = require("./utils");
 
 const app = express();
+
+const LIST_OF_SERVICES_ID = [486601, 486603, 486605, 486607, 486609]; // id полей услуг клиники
+const TYPE_TASK_FOR_CHECK = 3186358; // id типа задачи "Проверить"
+const MILISENCONDS_IN_PER_SECOND = 1000;
+const UNIX_ONE_DAY = 86400;
+
+
+const Entities = {
+	Contacts: "contacts",
+	Leads: "leads",
+}
 
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-api.getAccessToken().then(() => {
-	
-	
-	app.get("/", (req, res) => res.send("123"));
+api.getAccessToken();
 
-	app.get("/ping", (req, res) => res.send("pong " + Date.now()));
+app.get("/", (req, res) => res.send("123"));
 
+app.get("/ping", (req, res) => res.send("pong " + Date.now()));
 
+app.post("/hook", async (req, res) => {
 
-	app.post("/hook", (req, res) => {
+	const contactsRequareBody = req.body.contacts;
+
+	if (contactsRequareBody) {
+
+		const [{id:contactId}] = contactsRequareBody.update;
+
+		const contact = await api.getContact(contactId);
+
+		const [ dealId ] = Object.keys(contactsRequareBody.update[0].linked_leads_id).map(Number);
+
+		if (!dealId) {
+			logger.debug("Contact isn't attatched to the deal");
+			return;
+		}
 		
-		var contactId = req.body.contacts.add[0].id;
-		var customerAge;
-		var birthdayId = 403675;
-		const currentData = new Date();
+		const deal = await api.getDeal(dealId, [Entities.Contacts]);
 
+		const isContactMain = deal._embedded.contacts.find(item => item.id === Number(contactId)).is_main;
 
-		api.getContact(contactId).then(response => {
-			for (i = 0; i < response.custom_fields_values.length; i++)
-			{
-				if (response.custom_fields_values[i].field_id === birthdayId)
-				{
-					const birthday = new Date(response.custom_fields_values[i].values[0].value * 1000);
+		if (!isContactMain) {
+			logger.debug("Contact isn't main");
+			return;
+		}
+				
+		const servicesBill = LIST_OF_SERVICES_ID.reduce((accum, elem) => accum + Number(utils.getFieldValues(contact.custom_fields_values, elem)), 0);
+		
+		const updatedLeadsValues = {
+			id: dealId,
+			price: servicesBill,
+		}		
+		
+		await api.updateDeals(updatedLeadsValues);
 
-					if (currentData.getFullYear() - birthday.getFullYear() > 0) {
-						customerAge = currentData.getFullYear() - birthday.getFullYear();
-					}
-					else {
-						customerAge = 0;
-					}
+		const completeTill = Math.floor(Date.now() / MILISENCONDS_IN_PER_SECOND) + UNIX_ONE_DAY;
 
-					if (currentData.getMonth() - birthday.getMonth() < 0 && customerAge != 0) {
-						customerAge--;
-					}
-					else {
-						if (currentData.getMonth() - birthday.getMonth() === 0 && currentData.getDate() - birthday.getDate() < 0 && customerAge != 0) {
-							customerAge--;
-						}
-					}
-					var customerAgeObject = {
-						field_id: 410341,
-						field_name: 'Возраст',
-						field_code: null,
-						field_type: 'numeric',
-						values: [
-							{
-								value: customerAge
-							}
-						],
-					};
+		const tasks = await api.getTasks([dealId]);
 
-					response.custom_fields_values.push(customerAgeObject);
+		const isTaskAlreadyCreated = tasks.find(item => (item.entity_id === dealId && !item.is_completed));
 
-					api.updateContacts(response);
-
-					logger.debug(response.custom_fields_values)
-					break;
-				}
+		if (!isTaskAlreadyCreated) {
+			const addTaskField = {
+				responsible_user_id: deal.created_by,
+				task_type_id: TYPE_TASK_FOR_CHECK,
+				text: "Проверить бюджет",
+				complete_till: completeTill,
+				entity_id: dealId,
+				entity_type: Entities.Leads,
 			}
-		})
-		
-		
-		
-		res.send("OK");
-	});
 	
-	app.listen(config.PORT, () => logger.debug("Server started on ", config.PORT));
+			await api.createTasks(addTaskField);
+		}
+		else {
+			logger.debug("Task has already been created");
+		}	
+	}
+	
+	res.status(200).send({message: "ok"});
 });
- 
+
+app.post("/hookTask", async (req, res) => {
+	
+	const tasksRequreBody = req.body.task;
+
+	if(tasksRequreBody) {
+
+		const [{element_id:elementId}] = tasksRequreBody.update;
+		const [{responsible_user_id:responsibleUserId}] = tasksRequreBody.update;
+
+		if(!responsibleUserId){
+			return;
+		}
+
+		const createdNoteField = [{
+			created_by: Number(responsibleUserId),
+			entity_id: elementId,
+			entity_type: Entities.Leads,
+			note_type: "common",
+			params: {
+				text: "Бюджет проверен, ошибок нет"
+			},
+		}];
+
+		await api.createNotes(createdNoteField);
+	}
+	else{
+		logger.debug("Task update error");
+	}
+
+	logger.debug(tasksRequreBody);
+
+	res.status(200).send({message: "ok"});
+});
+
+app.listen(config.PORT, () => logger.debug("Server started on ", config.PORT));
